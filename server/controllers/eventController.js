@@ -103,7 +103,15 @@ const createEvent = async (req, res) => {
     const { title, description, date, time, location, category, capacity } =
       req.body;
 
-    if (!title || !description || !date || !time || !location || !category || !capacity) {
+    if (
+      !title ||
+      !description ||
+      !date ||
+      !time ||
+      !location ||
+      !category ||
+      !capacity
+    ) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -125,42 +133,74 @@ const createEvent = async (req, res) => {
     });
   } catch (error) {
     console.error("CREATE EVENT ERROR:", error);
-    return res.status(500).json({ message: "Failed to create event" });
+    return res.status(500).json({
+      message:
+        error?.errors?.category?.message ||
+        error?.errors?.date?.message ||
+        error?.errors?.capacity?.message ||
+        error?.message ||
+        "Failed to create event",
+    });
   }
 };
 
 const updateEvent = async (req, res) => {
   try {
-    const { title, description, date, time, location, category, capacity } =
-      req.body;
+    console.log("UPDATE EVENT BODY:", req.body);
+    console.log("UPDATE EVENT FILE:", req.file);
 
-    const event = await Event.findById(req.params.id);
+    const existingEvent = await Event.findById(req.params.id);
 
-    if (!event) {
+    if (!existingEvent) {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    event.title = title || event.title;
-    event.description = description || event.description;
-    event.date = date || event.date;
-    event.time = time || event.time;
-    event.location = location || event.location;
-    event.category = category || event.category;
-    event.capacity = capacity ? Number(capacity) : event.capacity;
+    const updateData = {
+      title: req.body.title,
+      description: req.body.description,
+      date: req.body.date,
+      time: req.body.time,
+      location: req.body.location,
+      category: req.body.category,
+      capacity:
+        req.body.capacity !== undefined && req.body.capacity !== ""
+          ? Number(req.body.capacity)
+          : undefined,
+    };
 
     if (req.file) {
-      event.image = `/uploads/${req.file.filename}`;
+      updateData.image = `/uploads/${req.file.filename}`;
     }
 
-    await event.save();
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key] === undefined || updateData[key] === "") {
+        delete updateData[key];
+      }
+    });
+
+    const updatedEvent = await Event.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).populate("createdBy", "name email");
 
     return res.status(200).json({
       message: "Event updated successfully",
-      event,
+      event: updatedEvent,
     });
   } catch (error) {
     console.error("UPDATE EVENT ERROR:", error);
-    return res.status(500).json({ message: "Failed to update event" });
+    return res.status(500).json({
+      message:
+        error?.errors?.category?.message ||
+        error?.errors?.date?.message ||
+        error?.errors?.capacity?.message ||
+        error?.message ||
+        "Failed to update event",
+    });
   }
 };
 
